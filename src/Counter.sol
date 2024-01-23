@@ -27,13 +27,14 @@ contract NftMarketplace {
 
     function createOrder(address orderCreator, address tokenAddress, uint tokenId, uint price, bytes signature, uint deadline) external {
         listingId++;
-        require(ownerOf(tokenId) == msg.msg.sender, "Not token owner");
-        require(isApprovedForAll());
-        require(tokenAddress != address(0), "Must be a valid address");
-        require(Address.hasCode(tokenAddress), "Has no code");
-        require(price > 0, "Can't set price lower than zero");
-        require(deadline >= block.timestamp + 23400, "Deadline is after 1 hour");
+        require(ERC721(tokenAddress).ownerOf(tokenId) == msg.sender, "Not token owner");
+        require(ERC721(tokenAddress) != address(0), "Must be a valid address");
+        require(0 < price, "Can't set price lower than zero");
+        require(block.timestamp + 1 days <= deadline, "Deadline is after 1 hour");
         Order storage order = Order(orderCreator, tokenAddress, tokenId, price, signature, deadline);
+        bytes32 messageHash = keccak256(abi.encodePacked(order));
+        bytes32 EthSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        require(messageHash.recover(_signature) == order.orderCreator, "Invalid signature");
         order.isActive = true;
         orders[listingId] = order;
     }  
@@ -43,8 +44,6 @@ contract NftMarketplace {
         require(block.timestamp <= orders[listingId].deadline, "Order time limit passed");
         require(!orders[listingId].isActive, "Order not active");
         Order storage order = orders[listingId];
-        bytes32 messageHash = keccak256(abi.encodePacked(_tokenId, msg.sender)).toEthSignedMessageHash();
-        require(messageHash.recover(_signature) == order.orderCreator, "Invalid signature");
         safeTransferFrom(order.orderCreator, msg.sender, order.tokenId);
         payable(order.orderCreator).transfer(msg.value);
         delete orders[listingId];
